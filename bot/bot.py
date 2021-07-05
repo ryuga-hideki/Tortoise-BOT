@@ -12,7 +12,7 @@ from discord.ext import commands
 from bot.api_client import TortoiseAPI
 from bot.constants import error_log_channel_id, bot_log_channel_id
 from bot.utils.embed_handler import info
-
+from bot.utils.multi_guild_backend import AuthorizedGuild
 
 logger = logging.getLogger(__name__)
 console_logger = logging.getLogger("console")
@@ -21,18 +21,13 @@ console_logger = logging.getLogger("console")
 class Bot(commands.Bot):
     # If not empty then only these will be loaded. Good for local debugging. If empty all found are loaded.
     allowed_extensions = ()
-    banned_extensions = ("advent_of_code",)
+    banned_extensions = ("advent_of_code", "invite_tracker")
 
     def __init__(self, prefix="t.", *args, **kwargs):
         super(Bot, self).__init__(*args, command_prefix=prefix, intents=discord.Intents.all(), **kwargs)
         self.api_client: TortoiseAPI = TortoiseAPI(loop=self.loop)
         self._was_ready_once = False
-        self.tortoise_meta_cache = {
-            "event_submission": False,
-            "mod_mail": False,
-            "bug_report": False,
-            "suggestions": False
-        }
+        self.authorized_guild_cache = dict
 
     async def on_ready(self):
         console_logger.info(
@@ -47,8 +42,8 @@ class Bot(commands.Bot):
 
     async def on_first_ready(self):
         self.load_extensions()
-        await self.change_presence(activity=discord.Game(name="DM me!"))
-        await self.reload_tortoise_meta_cache()
+        await self.change_presence(activity=discord.Game(name="DM to Contact Staff"))
+        await self.hard_reload_authorized_guild_cache()
         try:
             version = subprocess.check_output(["git", "describe", "--always"]).strip().decode("utf-8")
             bot_log_channel = self.get_channel(bot_log_channel_id)
@@ -56,11 +51,9 @@ class Bot(commands.Bot):
         except Exception as e:
             logger.info("Git image version not found", e)
 
-    async def reload_tortoise_meta_cache(self):
-        # For some reason it takes some time to propagate change in API database so if we fetch right away
-        # we will get old data.
-        await asyncio.sleep(3)
-        self.tortoise_meta_cache = await self.api_client.get_server_meta()
+    async def hard_reload_authorized_guild_cache(self):
+        for guild in await self.api_client.get_authorized_guild_config():
+            self.authorized_guild_cache[guild.get('id')] = AuthorizedGuild(guild)
 
     def load_extensions(self):
         for extension_path in Path("bot/cogs").glob("*.py"):

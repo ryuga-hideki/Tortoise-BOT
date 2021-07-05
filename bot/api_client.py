@@ -158,6 +158,10 @@ class TortoiseAPI(BaseAPIClient):
         # Return ('event_submission', 'mod_mail', 'bug_report', 'suggestions', 'suggestion_message_id', 'bot_status')
         return await self.get(f"server/meta/{guild_id}/")
 
+    async def get_authorized_guild_config(self) -> dict:
+        # Returns a list of server meta
+        return await self.get(f"server/meta/all/")
+
     async def get_suggestion_message_id(self) -> int:
         server_meta = await self.get_server_meta()
         return server_meta["suggestion_message_id"]
